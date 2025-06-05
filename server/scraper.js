@@ -339,8 +339,8 @@ async function debugScrape() {
     console.log('Navigating to page...');
 
     await page.goto('https://www.eventbrite.com/d/australia--sydney/events/', {
-      waitUntil: 'domcontentloaded',
-      timeout: 60000
+      waitUntil: 'networkidle0',
+      timeout: 100000
     });
 
     const pageInfo = await page.evaluate(() => {
