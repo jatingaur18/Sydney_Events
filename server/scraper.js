@@ -340,7 +340,7 @@ async function debugScrape() {
 
     await page.goto('https://www.eventbrite.com/d/australia--sydney/events/', {
       waitUntil: 'domcontentloaded',
-      timeout: 30000
+      timeout: 60000
     });
 
     const pageInfo = await page.evaluate(() => {

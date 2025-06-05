@@ -40,4 +40,4 @@ app.listen(PORT, () => {
 
 // Initial scrape and periodic updates
 setTimeout(scraper.updateEventCache, 5000);
-setInterval(scraper.updateEventCache, 30 * 60 * 1000);
+setInterval(scraper.updateEventCache, 60 * 60 * 1000);
