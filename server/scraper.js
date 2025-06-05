@@ -182,14 +182,14 @@ async function scrapeEventbriteEvents() {
 
         try {
           const detailPage = await browser.newPage();
-          await detailPage.setDefaultNavigationTimeout(30000);
-          await detailPage.setDefaultTimeout(30000);
+          await detailPage.setDefaultNavigationTimeout(60000);
+          await detailPage.setDefaultTimeout(60000);
           await detailPage.setUserAgent(page._userAgent);
           await detailPage.setViewport({ width: 1920, height: 1080 });
 
           await detailPage.goto(ev.originalUrl, {
-            waitUntil: 'networkidle0',
-            timeout: 30000
+            waitUntil: 'domcontentloaded',
+            timeout: 60000
           });
           await new Promise(res => setTimeout(res, 2000)); // allow dynamic content to render
 
