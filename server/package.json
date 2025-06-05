@@ -1,18 +1,22 @@
 {
-  "name": "server",
+  "name": "eventbrite-scraper-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "API for scraping Eventbrite events",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
+    "express": "^4.18.2",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "express-rate-limit": "^7.2.0",
-    "puppeteer": "^21.5.0"
+    "express-rate-limit": "^6.7.0",
+    "puppeteer": "^22.15.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

@@ -26,9 +26,7 @@ async function scrapeEventbriteEvents() {
         '--disable-renderer-backgrounding',
         '--disable-features=TranslateUI',
         '--disable-ipc-flooding-protection'
-      ],
-      // Set executable path if needed (Render should handle this automatically)
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+      ]
     });
 
     const page = await browser.newPage();
