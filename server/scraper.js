@@ -8,22 +8,35 @@ async function scrapeEventbriteEvents() {
   try {
     console.log('Starting to scrape Eventbrite events...');
 
-    const browser = await puppeteer.launch({
-        headless: 'new',
-        executablePath: '/usr/bin/google-chrome',
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu'
-        ]
+    // Updated browser launch configuration for Render
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu',
+        '--disable-extensions',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-features=TranslateUI',
+        '--disable-ipc-flooding-protection'
+      ],
+      // Set executable path if needed (Render should handle this automatically)
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     });
 
     const page = await browser.newPage();
+    
+    // Set memory limits for Render
+    await page.setDefaultNavigationTimeout(60000);
+    await page.setDefaultTimeout(60000);
+    
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
       'AppleWebKit/537.36 (KHTML, like Gecko) ' +
@@ -34,11 +47,11 @@ async function scrapeEventbriteEvents() {
     console.log('Navigating to Eventbrite Sydney events page...');
     await page.goto('https://www.eventbrite.com/d/australia--sydney/events/', {
       waitUntil: 'networkidle0',
-      timeout: 30000
+      timeout: 60000
     });
     await new Promise(res => setTimeout(res, 3000)); // allow dynamic content to load
 
-    // Scrape “card” data (title, date placeholder, image, originalUrl, etc.)
+    // Scrape "card" data (title, date placeholder, image, originalUrl, etc.)
     const basicEvents = await page.evaluate(() => {
       const possibleSelectors = [
         'article[data-testid="search-event-card"]',
@@ -159,119 +172,128 @@ async function scrapeEventbriteEvents() {
 
     console.log(`Found ${basicEvents.length} events on the listing page.`);
 
-    for (let i = 0; i < basicEvents.length; i++) {
-      const ev = basicEvents[i];
-      console.log(
-        `Scraping detail page for event ${i + 1}/${basicEvents.length}: ${ev.originalUrl}`
-      );
+    // Limit concurrent detail page scraping to prevent memory issues on Render
+    const maxConcurrent = 3;
+    for (let i = 0; i < basicEvents.length; i += maxConcurrent) {
+      const batch = basicEvents.slice(i, i + maxConcurrent);
+      const promises = batch.map(async (ev, batchIdx) => {
+        const actualIdx = i + batchIdx;
+        console.log(
+          `Scraping detail page for event ${actualIdx + 1}/${basicEvents.length}: ${ev.originalUrl}`
+        );
 
-      try {
-        const detailPage = await browser.newPage();
-        await detailPage.setUserAgent(page._userAgent);
-        await detailPage.setViewport({ width: 1920, height: 1080 });
+        try {
+          const detailPage = await browser.newPage();
+          await detailPage.setDefaultNavigationTimeout(30000);
+          await detailPage.setDefaultTimeout(30000);
+          await detailPage.setUserAgent(page._userAgent);
+          await detailPage.setViewport({ width: 1920, height: 1080 });
 
-        await detailPage.goto(ev.originalUrl, {
-          waitUntil: 'networkidle0',
-          timeout: 30000
-        });
-        await new Promise(res => setTimeout(res, 2000)); // allow dynamic content to render
+          await detailPage.goto(ev.originalUrl, {
+            waitUntil: 'networkidle0',
+            timeout: 30000
+          });
+          await new Promise(res => setTimeout(res, 2000)); // allow dynamic content to render
 
-        const detailData = await detailPage.evaluate(() => {
-          const getText = (selector) => {
-            const el = document.querySelector(selector);
-            return el ? el.innerText.trim() : null;
-          };
+          const detailData = await detailPage.evaluate(() => {
+            const getText = (selector) => {
+              const el = document.querySelector(selector);
+              return el ? el.innerText.trim() : null;
+            };
 
-          let startTime = null;
-          const timeTag = document.querySelector('time[datetime]');
-          if (timeTag) {
-            startTime = timeTag.getAttribute('datetime');
-          } else {
-            const altDate = document.querySelector('[data-automation="event-details-start-date"]');
-            if (altDate) {
-              startTime = altDate.innerText.trim();
-            }
-          }
-
-          let price = null;
-          const priceEl = document.querySelector('.js-display-price');
-          if (priceEl) {
-            price = priceEl.innerText.trim();
-          } else {
-            const allText = document.body.innerText || '';
-            const m = allText.match(/(Free|from\s*\$\d+|Starting\s*at\s*\$\d+|\$\d+)/i);
-            if (m) {
-              price = m[0];
-            }
-          }
-
-          let venueName = null;
-          let venueAddress = null;
-          const nameEl = document.querySelector('.location-info__address-text');
-          if (nameEl) {
-            venueName = nameEl.innerText.trim();
-          }
-
-          const addrBlock = document.querySelector('.location-info__address');
-          if (addrBlock) {
-            const fullAddr = addrBlock.innerText.trim();
-            if (venueName && fullAddr.startsWith(venueName)) {
-              const parts = fullAddr.split('\n');
-              venueAddress = parts.slice(1).join(', ').trim();
+            let startTime = null;
+            const timeTag = document.querySelector('time[datetime]');
+            if (timeTag) {
+              startTime = timeTag.getAttribute('datetime');
             } else {
-              venueAddress = fullAddr;
+              const altDate = document.querySelector('[data-automation="event-details-start-date"]');
+              if (altDate) {
+                startTime = altDate.innerText.trim();
+              }
             }
-          }
-          if (!venueAddress) {
-            venueAddress = 'Venue details not found';
-          }
-          if (!venueName && addrBlock) {
-            const lines = addrBlock.innerText.trim().split('\n');
-            if (lines.length > 1) {
-              venueName = lines[0].trim();
-              venueAddress = lines.slice(1).join(', ').trim();
-            }
-          }
 
-          const tags = [];
-          document.querySelectorAll('ul li.tags-item a.tags-link').forEach(a => {
-            const t = a.innerText.trim();
-            if (t) tags.push(t);
+            let price = null;
+            const priceEl = document.querySelector('.js-display-price');
+            if (priceEl) {
+              price = priceEl.innerText.trim();
+            } else {
+              const allText = document.body.innerText || '';
+              const m = allText.match(/(Free|from\s*\$\d+|Starting\s*at\s*\$\d+|\$\d+)/i);
+              if (m) {
+                price = m[0];
+              }
+            }
+
+            let venueName = null;
+            let venueAddress = null;
+            const nameEl = document.querySelector('.location-info__address-text');
+            if (nameEl) {
+              venueName = nameEl.innerText.trim();
+            }
+
+            const addrBlock = document.querySelector('.location-info__address');
+            if (addrBlock) {
+              const fullAddr = addrBlock.innerText.trim();
+              if (venueName && fullAddr.startsWith(venueName)) {
+                const parts = fullAddr.split('\n');
+                venueAddress = parts.slice(1).join(', ').trim();
+              } else {
+                venueAddress = fullAddr;
+              }
+            }
+            if (!venueAddress) {
+              venueAddress = 'Venue details not found';
+            }
+            if (!venueName && addrBlock) {
+              const lines = addrBlock.innerText.trim().split('\n');
+              if (lines.length > 1) {
+                venueName = lines[0].trim();
+                venueAddress = lines.slice(1).join(', ').trim();
+              }
+            }
+
+            const tags = [];
+            document.querySelectorAll('ul li.tags-item a.tags-link').forEach(a => {
+              const t = a.innerText.trim();
+              if (t) tags.push(t);
+            });
+
+            let humanDate = null;
+            const dateBlock = document.querySelector('.date-info__full-datetime');
+            if (dateBlock) {
+              humanDate = dateBlock.innerText.trim();
+            }
+
+            return {
+              startTime,
+              price,
+              venueName,
+              venueAddress,
+              tags,
+              humanDate
+            };
           });
 
-          let humanDate = null;
-          const dateBlock = document.querySelector('.date-info__full-datetime');
-          if (dateBlock) {
-            humanDate = dateBlock.innerText.trim();
-          }
-
-          return {
-            startTime,
-            price,
-            venueName,
-            venueAddress,
-            tags,
-            humanDate
+          basicEvents[actualIdx] = {
+            ...ev,
+            startTime: detailData.startTime,
+            humanDate: detailData.humanDate,
+            price: detailData.price || ev.price,
+            venueName: detailData.venueName,
+            venueAddress: detailData.venueAddress,
+            tags: detailData.tags
           };
-        });
 
-        basicEvents[i] = {
-          ...ev,
-          startTime: detailData.startTime,
-          humanDate: detailData.humanDate,
-          price: detailData.price || ev.price,
-          venueName: detailData.venueName,
-          venueAddress: detailData.venueAddress,
-          tags: detailData.tags
-        };
+          await detailPage.close();
+        } catch (innerErr) {
+          console.warn(
+            `Failed to scrape detail for event ${actualIdx + 1}:`,
+            innerErr.message
+          );
+        }
+      });
 
-        await detailPage.close();
-      } catch (innerErr) {
-        console.warn(
-          `Failed to scrape detail for event ${i + 1}:`,
-          innerErr.message
-        );
-      }
+      await Promise.all(promises);
     }
 
     console.log('Finished scraping all detail pages.');
@@ -295,6 +317,7 @@ async function updateEventCache() {
     console.log(`Event cache updated: ${events.length} events stored.`);
   } catch (error) {
     console.error('Failed to update event cache:', error.message);
+    // Don't throw the error - just log it so the server continues running
   }
 }
 
@@ -304,7 +327,7 @@ async function debugScrape() {
     console.log('Starting debug scrape...');
 
     browser = await puppeteer.launch({
-      headless: false, // Set to false for debugging
+      headless: true, // Keep headless true for Render
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
