@@ -3,10 +3,10 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const eventRoutes = require('./routes');
 const scraper = require('./scraper');
-app.set('trust proxy', true);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
 
