@@ -45,7 +45,7 @@ async function scrapeEventbriteEvents() {
     console.log('Navigating to Eventbrite Sydney events page...');
     await page.goto('https://www.eventbrite.com/d/australia--sydney/events/', {
       waitUntil: 'networkidle0',
-      timeout: 60000
+      timeout: 120000
     });
     await new Promise(res => setTimeout(res, 3000)); // allow dynamic content to load
 
