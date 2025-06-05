@@ -3,12 +3,10 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const eventRoutes = require('./routes');
 const scraper = require('./scraper');
-
-// Initialize Express app
+app.set('trust proxy', true);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -19,10 +17,8 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Routes
 app.use('/api', eventRoutes);
 
-// Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Unhandled error:', error);
   res.status(500).json({
@@ -31,13 +27,11 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
   console.log(`Events API: http://localhost:${PORT}/api/events`);
 });
 
-// Initial scrape and periodic updates
 setTimeout(scraper.updateEventCache, 5000);
 setInterval(scraper.updateEventCache, 60 * 60 * 1000);

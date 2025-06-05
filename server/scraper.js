@@ -7,10 +7,10 @@ async function scrapeEventbriteEvents() {
   let browser;
   try {
     console.log('Starting to scrape Eventbrite events...');
-
-    // Updated browser launch configuration for Render
+    const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable';
     browser = await puppeteer.launch({
       headless: true,
+      executablePath: chromePath,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -31,7 +31,6 @@ async function scrapeEventbriteEvents() {
 
     const page = await browser.newPage();
     
-    // Set memory limits for Render
     await page.setDefaultNavigationTimeout(60000);
     await page.setDefaultTimeout(60000);
     
@@ -49,7 +48,6 @@ async function scrapeEventbriteEvents() {
     });
     await new Promise(res => setTimeout(res, 3000)); // allow dynamic content to load
 
-    // Scrape "card" data (title, date placeholder, image, originalUrl, etc.)
     const basicEvents = await page.evaluate(() => {
       const possibleSelectors = [
         'article[data-testid="search-event-card"]',
@@ -170,7 +168,6 @@ async function scrapeEventbriteEvents() {
 
     console.log(`Found ${basicEvents.length} events on the listing page.`);
 
-    // Limit concurrent detail page scraping to prevent memory issues on Render
     const maxConcurrent = 3;
     for (let i = 0; i < basicEvents.length; i += maxConcurrent) {
       const batch = basicEvents.slice(i, i + maxConcurrent);
@@ -315,7 +312,6 @@ async function updateEventCache() {
     console.log(`Event cache updated: ${events.length} events stored.`);
   } catch (error) {
     console.error('Failed to update event cache:', error.message);
-    // Don't throw the error - just log it so the server continues running
   }
 }
 
